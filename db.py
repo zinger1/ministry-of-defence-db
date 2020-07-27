@@ -38,20 +38,54 @@ class DBTable(db_api.DBTable):
         self.fields = fields
         self.key_field_name = key_field_name
 
-    # def count(self) -> int:
-    #     return ra NotImplementedError
+    def count(self) -> int:
+        table_file = shelve.open(os.path.join('db_files', self.name + '.db'))
+        try:
+            count_table = len(table_file)
+        finally:
+            table_file.close()
+        return count_table
 
-    # def insert_record(self, values: Dict[str, Any]) -> None:
-    #     raise NotImplementedError
+    def insert_record(self, values):
+        if not len(values) == len(self.fields):
+            raise ValueError
+        for field in self.fields:
+            if field.name not in values.keys():
+                raise ValueError
+        table_file = shelve.open(os.path.join('db_files', self.name + '.db'), writeback=True)
+        try:
+            if table_file.get(str(values[self.key_field_name])):
+                table_file.close()
+                raise ValueError          
+            table_file[str(values.pop(self.key_field_name))] = values          
+        finally:
+            table_file.close()
+        
+    def delete_record(self, key):
+        shelve_file = shelve.open(os.path.join('db_files', self.name + '.db'), writeback=True)
+        try:
+            if not shelve_file.get(str(key)):
+                shelve_file.close()
+                raise ValueError
+            shelve_file.pop(str(key))
+        finally:
+            shelve_file.close()
 
-    # def delete_record(self, key: Any) -> None:
-    #     raise NotImplementedError
+    def delete_records(self, criteria):
+        table_file = shelve.open(os.path.join('db_files', self.name + '.db'), writeback=True)
+        # for criterion in criteria:
+        #     if criterion.field_name == self.key_field_name and :
+        #         table_file.pop(criterion.field_name)
 
-    # def delete_records(self, criteria: List[SelectionCriteria]) -> None:
-    #     raise NotImplementedError
+        for key in table_file.keys():
+            for criterion in criteria:
+                # search_key = None
+                if criterion.field_name == self.key_field_name and eval(f'{key} {criterion.operator} {criterion.value}'):
+                    table_file.pop(key)
+                # if criterion.field_name == self.key_field_name  or criterion.field._name in key.get(self.key_field_name).keys():
 
-    # def get_record(self, key: Any) -> Dict[str, Any]:
-    #     raise NotImplementedError
+    def get_record(self, key):
+        raise NotImplementedError
 
     # def update_record(self, key: Any, values: Dict[str, Any]) -> None:
     #     raise NotImplementedError
@@ -74,6 +108,8 @@ class DataBase(db_api.DataBase):
         if self.dict_tables.get(table_name):
             raise ValueError
         db_table = DBTable(table_name, fields, key_field_name)
+        if not self.dict_tables.get(table_name):
+            raise ValueError
         self.dict_tables[table_name] = db_table
         return self.dict_tables[table_name]
 
@@ -93,7 +129,9 @@ class DataBase(db_api.DataBase):
             raise ValueError
 
     def get_tables_names(self):
-        return self.dict_tables.keys()
+        if(self.dict_tables.keys()):
+            return list(self.dict_tables.keys())
+        return []
 
 
     # def query_multiple_tables(
