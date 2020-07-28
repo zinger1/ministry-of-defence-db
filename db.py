@@ -1,3 +1,5 @@
+import datetime as dt
+
 import db_api
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -7,26 +9,28 @@ import operator
 operators = {
     '<': operator.lt,
     '<=': operator.le,
+    '=': operator.eq,
     '==': operator.eq,
     '!=': operator.ne,
     '>=': operator.ge,
     '>': operator.gt
 }
+from typing import Any, Dict, List, Type
 
 
-# @dataclass_json
-# @dataclass
-# class DBField(db_api.DBField):
-#     name: str
-#     type: Type
+@dataclass_json
+@dataclass
+class DBField(db_api.DBField):
+    name: str
+    type: Type
 
 
-# @dataclass_json
-# @dataclass
-# class SelectionCriteria(db_api.SelectionCriteria):
-#     field_name: str
-#     operator: str
-#     value: Any
+@dataclass_json
+@dataclass
+class SelectionCriteria(db_api.SelectionCriteria):
+    field_name: str
+    operator: str
+    value: Any
 
 # from dataclasses import dataclass
 # from pathlib import Path
@@ -40,7 +44,7 @@ operators = {
 @dataclass
 class DBTable(db_api.DBTable):
     def __init__(self, name, fields, key_field_name):
-        path_file = os.path.join(db_api.DB_ROOT, name + '.db')
+        path_file = os.path.join(f'db_files\\{name}.db')
         table_file = shelve.open(path_file)
         table_file.close()
         self.name = name
@@ -56,10 +60,23 @@ class DBTable(db_api.DBTable):
         return count_table
 
     def insert_record(self, values):
-        if not len(values) == len(self.fields):
+        """
+    if values is None or len(values) > len(self.fields) or values[self.key_field_name] is None:
+        raise ValueError("bad index")
+    table = shelve.open(os.path.join('db_files', self.name), writeback=True)
+    try:
+        if table.get(str(values[self.key_field_name])):
+            table.close()
+            raise ValueError("already exist")
+        else:
+            table[str(values[self.key_field_name])] = values
+    finally:
+        table.close()"""
+        if len(values) != len(self.fields):
             raise ValueError
+        list_keys = values.keys()
         for field in self.fields:
-            if field.name not in values.keys():
+            if field.name not in list_keys:
                 raise ValueError
         table_file = shelve.open(os.path.join('db_files', self.name + '.db'), writeback=True)
         try:
@@ -127,23 +144,6 @@ class DBTable(db_api.DBTable):
             table_file.close()
             
     def query_table(self, criteria):
-        """
-        temp = list()
-        with shelve.open(os.path.join(db_api.DB_ROOT, self.name), writeback=True) as db:
-            for key in db.keys():
-                if key not in [field.name for field in self.fields]:
-                    flag = True
-                    for item in criteria:
-                        str_operator = operators.get(item.operator)
-                        if item.field_name == self.key_field_name and not str_operator(key, str(item.value)):
-                            flag = False
-                        elif not str_operator(db[key][db[item.field_name][0]], str(item.value)):
-                            flag = False
-                    if flag:
-                        temp.append(self.get_record(key))
-        return temp
-
-        """
         table_file = shelve.open(os.path.join('db_files', self.name + '.db'), writeback=True)
         list_records = list()
         try:
@@ -151,8 +151,9 @@ class DBTable(db_api.DBTable):
                 flag = 1
                 for criterion in criteria:
                     str_operator = operators.get(criterion.operator)
-                    if operator == '=':
-                        operator = '=='
+                    # if str_operator == '=':
+                    #     print("OK")
+                    #     str_operator = '=='
                     # if criterion.field_name == self.key_field_name and not eval(f'{key} {operator} {criterion.value}'):
                     if criterion.field_name == self.key_field_name and not str_operator(key, str(criterion.value)):
                         flag = 0
@@ -178,14 +179,19 @@ class DBTable(db_api.DBTable):
 @dataclass
 class DataBase(db_api.DataBase):
     __DICT_TABLES__ = {}
+    def __init__(self):
+        with shelve.open('DB', writeback=True) as db:
+            for key in db:
+                DataBase.__DICT_TABLES__[key] = DBTable(key, db[key][0], db[key][1])
 
     def create_table(self, table_name, fields, key_field_name):
         if table_name in DataBase.__DICT_TABLES__.keys():
-        # if self.dict_tables.get(table_name):
             raise ValueError
+        if key_field_name not in [field.name for field in fields]:
+            raise ValueError
+        with shelve.open('DB', writeback=True) as db:
+            db[table_name] = [fields, key_field_name]
         db_table = DBTable(table_name, fields, key_field_name)
-        # if not self.dict_tables.get(table_name):
-        #     raise ValueError
         DataBase.__DICT_TABLES__[table_name] = db_table
         return DataBase.__DICT_TABLES__[table_name]
 
@@ -198,17 +204,16 @@ class DataBase(db_api.DataBase):
         raise ValueError
 
     def delete_table(self, table_name: str) -> None:
-        if DataBase.__DICT_TABLES__[table_name]:
-            DataBase.__DICT_TABLES__.pop(table_name)
+        if DataBase.__DICT_TABLES__.get(table_name):
             os.remove(os.path.join('db_files', table_name + '.db.bak'))
             os.remove(os.path.join('db_files', table_name + '.db.dat'))
             os.remove(os.path.join('db_files', table_name + '.db.dir'))
-
+            DataBase.__DICT_TABLES__.pop(table_name)
         else:
             raise ValueError
 
     def get_tables_names(self):
-        if(DataBase.__DICT_TABLES__.keys()):
+        if DataBase.__DICT_TABLES__.keys():
             return list(DataBase.__DICT_TABLES__.keys())
         return []
 
@@ -221,4 +226,12 @@ class DataBase(db_api.DataBase):
     # ) -> List[Dict[str, Any]]:
     #     raise NotImplementedError
 
-
+def add_student(table: DBTable, index: int, **kwargs) -> None:
+    info = dict(
+        ID=1_000_000 + index,
+        First=f'John{index}',
+        Last=f'Doe{index}',
+        Birthday=dt.datetime(2000, 2, 1) + dt.timedelta(days=index)
+    )
+    info.update(**kwargs)
+    table.insert_record(info)
