@@ -3,6 +3,15 @@ from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import shelve
 import os
+import operator
+operators = {
+    '<': operator.lt,
+    '<=': operator.le,
+    '==': operator.eq,
+    '!=': operator.ne,
+    '>=': operator.ge,
+    '>': operator.gt
+}
 
 
 # @dataclass_json
@@ -72,27 +81,94 @@ class DBTable(db_api.DBTable):
             shelve_file.close()
 
     def delete_records(self, criteria):
+        
         table_file = shelve.open(os.path.join('db_files', self.name + '.db'), writeback=True)
-        # for criterion in criteria:
-        #     if criterion.field_name == self.key_field_name and :
-        #         table_file.pop(criterion.field_name)
-
-        for key in table_file.keys():
-            for criterion in criteria:
-                # search_key = None
-                if criterion.field_name == self.key_field_name and eval(f'{key} {criterion.operator} {criterion.value}'):
+        try:
+            for key in table_file.keys():
+                flag = 1
+                for criterion in criteria:
+                    operator = criterion.operator
+                    if operator == '=':
+                        operator = '=='
+                    if criterion.field_name == self.key_field_name and not eval(f'{key} {operator} {criterion.value}'):
+                        flag = 0
+                    elif criterion.field_name in self.fields and not eval(f'{table_file[key][criterion.field_name]} {operator} {criterion.value}'):
+                        flag = 0
+                if flag:
                     table_file.pop(key)
-                # if criterion.field_name == self.key_field_name  or criterion.field._name in key.get(self.key_field_name).keys():
-
+                else:
+                    flag = 1
+        finally:
+            table_file.close()
+        
     def get_record(self, key):
-        raise NotImplementedError
+        table_file = shelve.open(os.path.join('db_files', self.name + '.db'), writeback=True)
+        try:
+            if not table_file.get(str(key)):
+                table_file.close()
+                raise ValueError
+            return table_file[str(key)]
+        finally:
+            table_file.close()
 
-    # def update_record(self, key: Any, values: Dict[str, Any]) -> None:
-    #     raise NotImplementedError
+    def update_record(self, key, values):
+        table_file = shelve.open(os.path.join('db_files', self.name + '.db'), writeback=True)
+        try:
+            if not table_file.get(str(key)):
+                table_file.close()
+                raise ValueError
+            for key_ in values.keys():
+                if not key_ in [field.name for field in self.fields]:
+                    table_file.close()
+                    raise ValueError
+            for key_ in values.keys():
+                table_file[str(key)][str(key_)] = values[str(key_)]
+        finally:
+            table_file.close()
+            
+    def query_table(self, criteria):
+        """
+        temp = list()
+        with shelve.open(os.path.join(db_api.DB_ROOT, self.name), writeback=True) as db:
+            for key in db.keys():
+                if key not in [field.name for field in self.fields]:
+                    flag = True
+                    for item in criteria:
+                        str_operator = operators.get(item.operator)
+                        if item.field_name == self.key_field_name and not str_operator(key, str(item.value)):
+                            flag = False
+                        elif not str_operator(db[key][db[item.field_name][0]], str(item.value)):
+                            flag = False
+                    if flag:
+                        temp.append(self.get_record(key))
+        return temp
 
-    # def query_table(self, criteria: List[SelectionCriteria]) \
-    #         -> List[Dict[str, Any]]:
-    #     raise NotImplementedError
+        """
+        table_file = shelve.open(os.path.join('db_files', self.name + '.db'), writeback=True)
+        list_records = list()
+        try:
+            for key in table_file.keys():
+                flag = 1
+                for criterion in criteria:
+                    str_operator = operators.get(criterion.operator)
+                    if operator == '=':
+                        operator = '=='
+                    # if criterion.field_name == self.key_field_name and not eval(f'{key} {operator} {criterion.value}'):
+                    if criterion.field_name == self.key_field_name and not str_operator(key, str(criterion.value)):
+                        flag = 0
+                    # elif criterion.field_name in self.fields and not eval(f'{table_file[key][criterion.field_name]} {operator} {criterion.value}'):
+                    elif not str_operator(table_file[key][criterion.field_name], str(criterion.value)):
+                        flag = 0
+                if flag:
+                    list_records.append(self.get_record(key))
+                    print(self.get_record(key))
+                    # print(table_file[key])  
+                else:
+                    flag = 1
+        finally:
+            table_file.close()
+            return list_records
+
 
     # def create_index(self, field_to_index: str) -> None:
     #     raise NotImplementedError
@@ -101,36 +177,39 @@ class DBTable(db_api.DBTable):
 @dataclass_json
 @dataclass
 class DataBase(db_api.DataBase):
-    def __init__(self):
-        self.dict_tables = {}
+    __DICT_TABLES__ = {}
 
     def create_table(self, table_name, fields, key_field_name):
-        if self.dict_tables.get(table_name):
+        if table_name in DataBase.__DICT_TABLES__.keys():
+        # if self.dict_tables.get(table_name):
             raise ValueError
         db_table = DBTable(table_name, fields, key_field_name)
-        if not self.dict_tables.get(table_name):
-            raise ValueError
-        self.dict_tables[table_name] = db_table
-        return self.dict_tables[table_name]
+        # if not self.dict_tables.get(table_name):
+        #     raise ValueError
+        DataBase.__DICT_TABLES__[table_name] = db_table
+        return DataBase.__DICT_TABLES__[table_name]
 
     def num_tables(self) -> int:
-        return len(self.dict_tables)
+        return len(DataBase.__DICT_TABLES__)
 
     def get_table(self, table_name: str) -> DBTable:
-        if self.dict_tables.get(table_name):
-            return self.dict_tables[table_name]
+        if DataBase.__DICT_TABLES__.get(table_name):
+            return DataBase.__DICT_TABLES__[table_name]
         raise ValueError
 
     def delete_table(self, table_name: str) -> None:
-        if self.dict_tables[table_name]:
-            self.dict_tables.pop(table_name)
-            os.remove(os.path.join('db_files', table_name + '.db'))
+        if DataBase.__DICT_TABLES__[table_name]:
+            DataBase.__DICT_TABLES__.pop(table_name)
+            os.remove(os.path.join('db_files', table_name + '.db.bak'))
+            os.remove(os.path.join('db_files', table_name + '.db.dat'))
+            os.remove(os.path.join('db_files', table_name + '.db.dir'))
+
         else:
             raise ValueError
 
     def get_tables_names(self):
-        if(self.dict_tables.keys()):
-            return list(self.dict_tables.keys())
+        if(DataBase.__DICT_TABLES__.keys()):
+            return list(DataBase.__DICT_TABLES__.keys())
         return []
 
 
