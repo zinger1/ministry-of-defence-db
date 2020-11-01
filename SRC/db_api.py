@@ -84,3 +84,4 @@ class DataBase:
             fields_to_join_by: List[str]
     ) -> List[Dict[str, Any]]:
         raise NotImplementedError
+
