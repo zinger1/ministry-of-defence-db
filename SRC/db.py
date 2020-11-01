@@ -1,9 +1,12 @@
-import db_api
+from SRC import db_api
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import shelve
 import os
+from typing import Any, Type
+
 import operator
+
 operators = {
     '<': operator.lt,
     '<=': operator.le,
@@ -13,7 +16,6 @@ operators = {
     '>=': operator.ge,
     '>': operator.gt
 }
-from typing import Any, Dict, List, Type
 
 
 @dataclass_json
@@ -30,7 +32,9 @@ class SelectionCriteria(db_api.SelectionCriteria):
     operator: str
     value: Any
 
+
 # DB_ROOT = Path('db_files')
+
 
 @dataclass_json
 @dataclass
@@ -52,7 +56,7 @@ class DBTable(db_api.DBTable):
             table_file.close()
         return count_table
 
-    def insert_record(self, values):       
+    def insert_record(self, values):
         if len(values) != len(self.fields):
             raise ValueError
         list_keys = values.keys()
@@ -63,11 +67,11 @@ class DBTable(db_api.DBTable):
         try:
             if table_file.get(str(values[self.key_field_name])):
                 table_file.close()
-                raise ValueError          
-            table_file[str(values.pop(self.key_field_name))] = values          
+                raise ValueError
+            table_file[str(values.pop(self.key_field_name))] = values
         finally:
             table_file.close()
-        
+
     def delete_record(self, key):
         shelve_file = shelve.open(os.path.join('db_files', self.name + '.db'), writeback=True)
         try:
@@ -87,7 +91,8 @@ class DBTable(db_api.DBTable):
                     str_operator = operators.get(criterion.operator)
                     if criterion.field_name == self.key_field_name and not str_operator(key, str(criterion.value)):
                         flag = 0
-                    elif criterion.field_name in self.fields and not str_operator(table_file[key][criterion.field_name], str(criterion.value)):
+                    elif criterion.field_name in self.fields and not str_operator(table_file[key][criterion.field_name],
+                                                                                  str(criterion.value)):
                         flag = 0
                 if flag:
                     table_file.pop(key)
@@ -95,7 +100,7 @@ class DBTable(db_api.DBTable):
                     flag = 1
         finally:
             table_file.close()
-        
+
     def get_record(self, key):
         table_file = shelve.open(os.path.join('db_files', self.name + '.db'), writeback=True)
 
@@ -123,7 +128,7 @@ class DBTable(db_api.DBTable):
                 table_file[str(key)][str(key_)] = values[str(key_)]
         finally:
             table_file.close()
-            
+
     def query_table(self, criteria):
         table_file = shelve.open(os.path.join('db_files', self.name + '.db'), writeback=True)
         list_records = list()
@@ -145,14 +150,15 @@ class DBTable(db_api.DBTable):
             return list_records
 
 
-    # def create_index(self, field_to_index: str) -> None:
-    #     raise NotImplementedError
+# def create_index(self, field_to_index: str) -> None:
+#     raise NotImplementedError
 
 
 @dataclass_json
 @dataclass
 class DataBase(db_api.DataBase):
     __DICT_TABLES__ = {}
+
     def __init__(self):
         with shelve.open('DB', writeback=True) as db:
             for key in db:
@@ -191,11 +197,10 @@ class DataBase(db_api.DataBase):
             return list(DataBase.__DICT_TABLES__.keys())
         return []
 
-
-    # def query_multiple_tables(
-    #         self,
-    #         tables: List[str],
-    #         fields_and_values_list: List[List[SelectionCriteria]],
-    #         fields_to_join_by: List[str]
-    # ) -> List[Dict[str, Any]]:
-    #     raise NotImplementedError
+# def query_multiple_tables(
+#         self,
+#         tables: List[str],
+#         fields_and_values_list: List[List[SelectionCriteria]],
+#         fields_to_join_by: List[str]
+# ) -> List[Dict[str, Any]]:
+#     raise NotImplementedError
