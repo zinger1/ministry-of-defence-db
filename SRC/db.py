@@ -1,5 +1,3 @@
-import datetime as dt
-
 import db_api
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -32,20 +30,15 @@ class SelectionCriteria(db_api.SelectionCriteria):
     operator: str
     value: Any
 
-# from dataclasses import dataclass
-# from pathlib import Path
-# from typing import Any, Dict, List, Type
-
-# from dataclasses_json import dataclass_json
-
 # DB_ROOT = Path('db_files')
 
 @dataclass_json
 @dataclass
 class DBTable(db_api.DBTable):
     def __init__(self, name, fields, key_field_name):
-        path_file = os.path.join(f'db_files\\{name}.db')
-        table_file = shelve.open(path_file)
+        path_file = os.path.join('db_files', name)
+        os.makedirs(path_file)
+        table_file = shelve.open(os.path.join(f'{path_file}\\{name}.db'))
         table_file.close()
         self.name = name
         self.fields = fields
@@ -59,19 +52,7 @@ class DBTable(db_api.DBTable):
             table_file.close()
         return count_table
 
-    def insert_record(self, values):
-        """
-    if values is None or len(values) > len(self.fields) or values[self.key_field_name] is None:
-        raise ValueError("bad index")
-    table = shelve.open(os.path.join('db_files', self.name), writeback=True)
-    try:
-        if table.get(str(values[self.key_field_name])):
-            table.close()
-            raise ValueError("already exist")
-        else:
-            table[str(values[self.key_field_name])] = values
-    finally:
-        table.close()"""
+    def insert_record(self, values):       
         if len(values) != len(self.fields):
             raise ValueError
         list_keys = values.keys()
@@ -98,18 +79,15 @@ class DBTable(db_api.DBTable):
             shelve_file.close()
 
     def delete_records(self, criteria):
-        
         table_file = shelve.open(os.path.join('db_files', self.name + '.db'), writeback=True)
         try:
             for key in table_file.keys():
                 flag = 1
                 for criterion in criteria:
-                    operator = criterion.operator
-                    if operator == '=':
-                        operator = '=='
-                    if criterion.field_name == self.key_field_name and not eval(f'{key} {operator} {criterion.value}'):
+                    str_operator = operators.get(criterion.operator)
+                    if criterion.field_name == self.key_field_name and not str_operator(key, str(criterion.value)):
                         flag = 0
-                    elif criterion.field_name in self.fields and not eval(f'{table_file[key][criterion.field_name]} {operator} {criterion.value}'):
+                    elif criterion.field_name in self.fields and not str_operator(table_file[key][criterion.field_name], str(criterion.value)):
                         flag = 0
                 if flag:
                     table_file.pop(key)
@@ -120,11 +98,14 @@ class DBTable(db_api.DBTable):
         
     def get_record(self, key):
         table_file = shelve.open(os.path.join('db_files', self.name + '.db'), writeback=True)
+
         try:
             if not table_file.get(str(key)):
                 table_file.close()
                 raise ValueError
-            return table_file[str(key)]
+            result = {self.key_field_name: key}
+            result.update(table_file[str(key)])
+            return result
         finally:
             table_file.close()
 
@@ -151,19 +132,12 @@ class DBTable(db_api.DBTable):
                 flag = 1
                 for criterion in criteria:
                     str_operator = operators.get(criterion.operator)
-                    # if str_operator == '=':
-                    #     print("OK")
-                    #     str_operator = '=='
-                    # if criterion.field_name == self.key_field_name and not eval(f'{key} {operator} {criterion.value}'):
                     if criterion.field_name == self.key_field_name and not str_operator(key, str(criterion.value)):
                         flag = 0
-                    # elif criterion.field_name in self.fields and not eval(f'{table_file[key][criterion.field_name]} {operator} {criterion.value}'):
                     elif not str_operator(table_file[key][criterion.field_name], str(criterion.value)):
                         flag = 0
                 if flag:
                     list_records.append(self.get_record(key))
-                    print(self.get_record(key))
-                    # print(table_file[key])  
                 else:
                     flag = 1
         finally:
@@ -225,13 +199,3 @@ class DataBase(db_api.DataBase):
     #         fields_to_join_by: List[str]
     # ) -> List[Dict[str, Any]]:
     #     raise NotImplementedError
-
-def add_student(table: DBTable, index: int, **kwargs) -> None:
-    info = dict(
-        ID=1_000_000 + index,
-        First=f'John{index}',
-        Last=f'Doe{index}',
-        Birthday=dt.datetime(2000, 2, 1) + dt.timedelta(days=index)
-    )
-    info.update(**kwargs)
-    table.insert_record(info)
