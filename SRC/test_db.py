@@ -62,16 +62,6 @@ def backup_db() -> Generator[Path, None, None]:
     yield DB_BACKUP_ROOT
 
 
-# def test_reload_from_backup(backup_db: Path) -> None:
-#     """This test requires preparing the backup by calling create_db_backup()"""
-#     delete_files(DB_ROOT)
-#     for path in backup_db.iterdir():
-#         (DB_ROOT / path.name).write_bytes(path.read_bytes())
-#     db = DataBase()
-#     assert db.num_tables() == 1
-#     assert db.get_tables_names() == ['Students']
-#     students = db.get_table('Students')
-#     assert students.count() == 100
 def test_reload_from_backup(backup_db: Path) -> None:
     """This test requires preparing the backup by calling create_db_backup()"""
     delete_files(DB_ROOT)
